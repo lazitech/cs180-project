@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#090d10"><meta name="description" content="Anzhe Lyu's CS180 Project 4A: recovering homographies from hand-picked correspondences, inverse warping with nearest neighbor and bilinear interpolation, rectification, and feathered image mosaics.">
+<title>CS180 Project 4A: Image Warping and Mosaicing</title><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.css"><link rel="stylesheet" href="styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/katex.min.js" defer></script><script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.11/contrib/auto-render.min.js" defer></script><script src="script.js" defer></script></head>
+<body><a class="skip" href="#shoot">Skip to report</a><header class="chrome"><span>CS180 PROJECT 4A</span><span>ANZHE LYU, FALL 2026</span></header>
+<nav class="progress" aria-label="Report sections"><span id="section-number">01</span>
+<a href="#cover" aria-label="Introduction" title="Introduction"><span></span></a>
+<a href="#shoot" aria-label="A.1 Shoot the Pictures" title="A.1 Shoot the Pictures"><span></span></a>
+<a href="#homography" aria-label="A.2 Recover Homographies" title="A.2 Recover Homographies"><span></span></a>
+<a href="#warp" aria-label="A.3 Warp the Images" title="A.3 Warp the Images"><span></span></a>
+<a href="#rectify" aria-label="A.3 Rectification" title="A.3 Rectification"><span></span></a>
+<a href="#interp" aria-label="A.3 Nearest Neighbor vs Bilinear" title="A.3 Nearest Neighbor vs Bilinear"><span></span></a>
+<a href="#mosaic" aria-label="A.4 Blend into a Mosaic" title="A.4 Blend into a Mosaic"><span></span></a>
+<a href="#results" aria-label="A.4 Mosaics" title="A.4 Mosaics"><span></span></a>
+<span class="total">08</span></nav><main>
+
+<section id="cover" class="scene cover"><div class="cover-layout"><div><p class="kicker">CS180 Programming Project 4</p>
+<h1>Part A: <em>Image Warping and Mosaicing</em></h1><p class="intro">Photographs taken by rotating a camera about a fixed center of projection are related by homographies. I recover each homography from hand-picked correspondences, write inverse warping with nearest neighbor and bilinear interpolation, rectify planar objects, and blend three-image mosaics with a linear feather.</p>
+<p class="byline">Anzhe Lyu, UC Berkeley, Fall 2026</p></div><div>
+<figure class="result hero-figure"><a class="image-frame" href="media/mosaics/mosaic_123.jpg" target="_blank" rel="noopener"><img src="media/mosaics/mosaic_123.jpg" alt="Three-image mosaic of snowy Sierra peaks above a forested ridge" width="2000" height="1906" fetchpriority="high"></a>
+<figcaption><span>Photos 1, 2, 3 warped into the plane of photo 2</span></figcaption></figure>
+</div></div></section>
+
+<section id="shoot" class="scene"><div class="section-heading"><p class="kicker">Part A.1</p><h2><span class="section-num">A.1</span> Shoot the Pictures</h2><p>Two sets are my own: I shot 18 photos in 41 seconds from one overlook on an iPhone 15 Pro Max, using only the 24&nbsp;mm main lens (no ultra-wide, so straight lines stay straight) and turning the phone between shots. The third set comes from the Adobe Panoramas dataset, which was shot on a tripod.</p></div>
+<div class="case-block"><h3>Set 1: Snowy peaks (photos 1, 2, 3)</h3>
+<div class="figure-grid three"><figure class="result"><a class="image-frame" href="media/sources/peaks_1.jpg" target="_blank" rel="noopener"><img src="media/sources/peaks_1.jpg" alt="Photo 1" width="675" height="900" loading="lazy"></a><figcaption>1.jpg (left)</figcaption></figure><figure class="result"><a class="image-frame" href="media/sources/peaks_2.jpg" target="_blank" rel="noopener"><img src="media/sources/peaks_2.jpg" alt="Photo 2" width="675" height="900" loading="lazy"></a><figcaption>2.jpg (reference)</figcaption></figure><figure class="result"><a class="image-frame" href="media/sources/peaks_3.jpg" target="_blank" rel="noopener"><img src="media/sources/peaks_3.jpg" alt="Photo 3" width="675" height="900" loading="lazy"></a><figcaption>3.jpg (right)</figcaption></figure></div></div>
+<div class="case-block"><h3>Set 2: River valley (photos 9, 10, 11)</h3>
+<div class="figure-grid three"><figure class="result"><a class="image-frame" href="media/sources/valley_9.jpg" target="_blank" rel="noopener"><img src="media/sources/valley_9.jpg" alt="Photo 9" width="675" height="900" loading="lazy"></a><figcaption>9.jpg (left)</figcaption></figure><figure class="result"><a class="image-frame" href="media/sources/valley_10.jpg" target="_blank" rel="noopener"><img src="media/sources/valley_10.jpg" alt="Photo 10" width="675" height="900" loading="lazy"></a><figcaption>10.jpg (reference)</figcaption></figure><figure class="result"><a class="image-frame" href="media/sources/valley_11.jpg" target="_blank" rel="noopener"><img src="media/sources/valley_11.jpg" alt="Photo 11" width="675" height="900" loading="lazy"></a><figcaption>11.jpg (right)</figcaption></figure></div></div>
+<div class="case-block"><h3>Set 3: Golden Gate Bridge (supplementary, from the internet)</h3>
+<div class="figure-grid three"><figure class="result"><a class="image-frame" href="media/sources/goldengate_goldengate-01.jpg" target="_blank" rel="noopener"><img src="media/sources/goldengate_goldengate-01.jpg" alt="Golden Gate image 01" width="600" height="900" loading="lazy"></a><figcaption>goldengate-01 (left)</figcaption></figure><figure class="result"><a class="image-frame" href="media/sources/goldengate_goldengate-02.jpg" target="_blank" rel="noopener"><img src="media/sources/goldengate_goldengate-02.jpg" alt="Golden Gate image 02" width="600" height="900" loading="lazy"></a><figcaption>goldengate-02 (reference)</figcaption></figure><figure class="result"><a class="image-frame" href="media/sources/goldengate_goldengate-03.jpg" target="_blank" rel="noopener"><img src="media/sources/goldengate_goldengate-03.jpg" alt="Golden Gate image 03" width="600" height="900" loading="lazy"></a><figcaption>goldengate-03 (right)</figcaption></figure></div></div>
+</section>
+
+<section id="homography" class="scene"><div class="section-heading"><p class="kicker">Part A.2</p><h2><span class="section-num">A.2</span> Recover Homographies</h2><p>A homography maps \(p = (x, y, 1)^\top\) to \(p' \sim Hp\). Fixing \(h_{33} = 1\) leaves 8 unknowns. Each correspondence gives two equations, so I click 14–19 pairs per image pair and solve the overdetermined system by least squares.</p></div>
+<div class="equation">\[\begin{bmatrix} wx' \\ wy' \\ w \end{bmatrix} = \begin{bmatrix} h_1 & h_2 & h_3 \\ h_4 & h_5 & h_6 \\ h_7 & h_8 & 1 \end{bmatrix}\begin{bmatrix} x \\ y \\ 1 \end{bmatrix} \quad\Rightarrow\quad x' = \frac{h_1x + h_2y + h_3}{h_7x + h_8y + 1},\quad y' = \frac{h_4x + h_5y + h_6}{h_7x + h_8y + 1}\]</div>
+<p>Multiplying through by the denominator makes both equations linear in \(h\). Each pair of points adds two rows to \(A h = b\):</p>
+<div class="equation">\[\begin{bmatrix} x & y & 1 & 0 & 0 & 0 & -x x' & -y x' \\ 0 & 0 & 0 & x & y & 1 & -x y' & -y y' \\ & & & & \vdots & & & \end{bmatrix}\begin{bmatrix} h_1 \\ \vdots \\ h_8 \end{bmatrix} = \begin{bmatrix} x' \\ y' \\ \vdots \end{bmatrix}, \qquad h = (A^\top A)^{-1}A^\top b\]</div>
+<div class="code-block"><h3>computeH</h3><pre><code>def computeH(img1_pts, img2_pts):
+    A = []
+    b = []
+    for (x1, y1), (x2, y2) in zip(img1_pts, img2_pts):
+        A.append([-x1, -y1, -1, 0, 0, 0, x2*x1, x2*y1])
+        A.append([0, 0, 0, -x1, -y1, -1, y2*x1, y2*y1])
+        b.append(-x2)
+        b.append(-y2)
+    A = np.array(A)
+    b = np.array(b)
+    H = np.linalg.inv(A.T @ A) @ A.T @ b
+    H = np.append(H, 1.0)
+    return H.reshape(3, 3)</code></pre></div>
+
+<h3 class="subheading">Correspondences</h3>
+<p class="note" style="margin-top:0">I picked the points in a small local tool and saved them to JSON.</p>
+<div class="figure-grid">
+<figure><a class="image-frame" href="media/correspondences/peaks_1_2.jpg" target="_blank" rel="noopener"><img src="media/correspondences/peaks_1_2.jpg" alt="Correspondences between photos 1 and 2" width="1320" height="902" loading="lazy"></a><figcaption>1 → 2, 14 pairs</figcaption></figure>
+<figure><a class="image-frame" href="media/correspondences/peaks_2_3.jpg" target="_blank" rel="noopener"><img src="media/correspondences/peaks_2_3.jpg" alt="Correspondences between photos 2 and 3" width="1320" height="902" loading="lazy"></a><figcaption>2 → 3, 14 pairs</figcaption></figure>
+<figure><a class="image-frame" href="media/correspondences/valley_9_10.jpg" target="_blank" rel="noopener"><img src="media/correspondences/valley_9_10.jpg" alt="Correspondences between photos 9 and 10" width="1320" height="902" loading="lazy"></a><figcaption>9 → 10, 14 pairs</figcaption></figure>
+<figure><a class="image-frame" href="media/correspondences/valley_10_11.jpg" target="_blank" rel="noopener"><img src="media/correspondences/valley_10_11.jpg" alt="Correspondences between photos 10 and 11" width="1320" height="902" loading="lazy"></a><figcaption>10 → 11, 18 pairs</figcaption></figure>
+<figure><a class="image-frame" href="media/correspondences/gold_1_2.jpg" target="_blank" rel="noopener"><img src="media/correspondences/gold_1_2.jpg" alt="Correspondences between Golden Gate images 01 and 02" width="1320" height="902" loading="lazy"></a><figcaption>goldengate 01 → 02, 15 pairs</figcaption></figure>
+<figure><a class="image-frame" href="media/correspondences/gold_2_3.jpg" target="_blank" rel="noopener"><img src="media/correspondences/gold_2_3.jpg" alt="Correspondences between Golden Gate images 02 and 03" width="1320" height="902" loading="lazy"></a><figcaption>goldengate 02 → 03, 19 pairs</figcaption></figure>
+</div>
+
+<h3 class="subheading">Recovered homographies</h3>
+<div class="figure-grid">
+<div class="equation">\[H_{1\to2} = \begin{bmatrix} 1.398 & -0.08297 & -1389 \\ 0.3420 & 1.259 & -890.3 \\ 9.239\times10^{-5} & 1.105\times10^{-6} & 1 \end{bmatrix}\]</div>
+<div class="equation">\[H_{2\to3} = \begin{bmatrix} 1.415 & -0.1398 & -1742 \\ 0.4220 & 1.126 & -721.0 \\ 1.217\times10^{-4} & -3.262\times10^{-5} & 1 \end{bmatrix}\]</div>
+<div class="equation">\[H_{9\to10} = \begin{bmatrix} 1.300 & -0.04435 & -1566 \\ 0.2550 & 1.087 & -409.4 \\ 9.013\times10^{-5} & -1.826\times10^{-5} & 1 \end{bmatrix}\]</div>
+<div class="equation">\[H_{10\to11} = \begin{bmatrix} 1.436 & 0.004982 & -2015 \\ 0.2773 & 1.266 & -769.3 \\ 1.034\times10^{-4} & -2.145\times10^{-6} & 1 \end{bmatrix}\]</div>
+<div class="equation">\[H_{01\to02}^{\text{gg}} = \begin{bmatrix} 1.095 & 0.007670 & -278.7 \\ 0.06094 & 1.065 & -25.79 \\ 1.509\times10^{-4} & 1.107\times10^{-6} & 1 \end{bmatrix}\]</div>
+<div class="equation">\[H_{02\to03}^{\text{gg}} = \begin{bmatrix} 1.098 & 0.007495 & -291.3 \\ 0.06521 & 1.077 & -28.53 \\ 1.703\times10^{-4} & 5.256\times10^{-6} & 1 \end{bmatrix}\]</div>
+</div>
+<div class="table-wrap technical-table"><table><caption>Reprojection error \(\lVert \pi(Hp_i) - p'_i \rVert\) over the clicked points, in pixels of each pair's own images.</caption>
+<thead><tr><th>Pair</th><th>Points</th><th>Image size</th><th>Mean error</th><th>Max error</th></tr></thead><tbody>
+<tr><th>1 → 2</th><td>14</td><td>4284&times;5712</td><td>2.79 px</td><td>8.50 px</td></tr>
+<tr><th>2 → 3</th><td>14</td><td>4284&times;5712</td><td>1.27 px</td><td>3.06 px</td></tr>
+<tr><th>9 → 10</th><td>14</td><td>4284&times;5712</td><td>2.88 px</td><td>5.01 px</td></tr>
+<tr><th>10 → 11</th><td>18</td><td>4284&times;5712</td><td>2.31 px</td><td>5.42 px</td></tr>
+<tr><th>goldengate 01 → 02</th><td>15</td><td>600&times;900</td><td>0.68 px</td><td>1.23 px</td></tr>
+<tr><th>goldengate 02 → 03</th><td>19</td><td>600&times;900</td><td>0.41 px</td><td>1.04 px</td></tr>
+</tbody></table></div>
+<p class="note">The tripod-shot Golden Gate pairs fit to under a pixel. My handheld pairs fit to 1–3&nbsp;px on 24-megapixel images. Their largest residuals fall on the nearer slopes, where a few centimeters of camera motion causes slight parallax that no single homography can absorb.</p>
+</section>
+
+<section id="warp" class="scene"><div class="section-heading"><p class="kicker">Part A.3</p><h2><span class="section-num">A.3</span> Warp the Images</h2><p>I use inverse warping. Forward-mapping each source pixel would leave holes in the output, so I go the other way: map each output pixel back through \(H^{-1}\) and sample the source there. This guarantees every output pixel gets a value.</p></div>
+<div class="method-layout" style="grid-template-columns:1fr;max-width:1400px">
+<div class="steps">
+<article><span>01</span><div><h3>Bounding box</h3><p>Push the four corners through \(H\), divide by \(w\), and take the floor of the minima and the ceiling of the maxima. This box sets the output size. Its top-left corner \((x_{\min}, y_{\min})\) is returned so the mosaic code knows where to place the result.</p></div></article>
+<article><span>02</span><div><h3>Inverse map</h3><p>Build homogeneous coordinates for every output pixel with <code>meshgrid</code>, multiply all of them by \(H^{-1}\) at once, and divide by the third row. This gives a sub-pixel source location \((s_x, s_y)\) for every output pixel.</p></div></article>
+<article><span>03</span><div><h3>Sample</h3><p><strong>Nearest neighbor:</strong> round \((s_x, s_y)\) and copy that pixel. <strong>Bilinear:</strong> blend the four surrounding pixels. Locations that fall outside the source get \(\alpha = 0\), which marks them as having no data.</p></div></article>
+</div></div>
+<div class="equation">\[I'(x, y) = (1-d_y)\big[(1-d_x)\,I_{00} + d_x\,I_{10}\big] + d_y\big[(1-d_x)\,I_{01} + d_x\,I_{11}\big],\qquad d_x = s_x - \lfloor s_x\rfloor,\; d_y = s_y - \lfloor s_y\rfloor\]</div>
+<div class="code-block"><h3>inverse_map, warpImageNearestNeighbor, warpImageBilinear</h3><pre><code>def inverse_map(im, H):
+    x_min, y_min, x_max, y_max = warp_bounds(im.shape, H)
+    out_w = x_max - x_min + 1
+    out_h = y_max - y_min + 1
+    xs, ys = np.meshgrid(np.arange(x_min, x_max + 1), np.arange(y_min, y_max + 1))
+    pts = np.array([xs.flatten(), ys.flatten(), np.ones(out_w * out_h)])
+    src = np.linalg.inv(H) @ pts
+    sx = (src[0] / src[2]).reshape(out_h, out_w)
+    sy = (src[1] / src[2]).reshape(out_h, out_w)
+    return sx, sy, x_min, y_min, out_w, out_h
+
+def warpImageNearestNeighbor(im, H):
+    h, w = im.shape[0], im.shape[1]
+    sx, sy, x_min, y_min, out_w, out_h = inverse_map(im, H)
+    sx = np.round(sx).astype(int)
+    sy = np.round(sy).astype(int)
+    inside = (sx &gt;= 0) &amp; (sx &lt; w) &amp; (sy &gt;= 0) &amp; (sy &lt; h)
+    imwarped = np.zeros((out_h, out_w, 3), dtype=np.uint8)
+    imwarped[inside] = im[sy[inside], sx[inside]]
+    alpha = inside.astype(float)
+    return imwarped, alpha, (x_min, y_min)
+
+def warpImageBilinear(im, H):
+    h, w = im.shape[0], im.shape[1]
+    sx, sy, x_min, y_min, out_w, out_h = inverse_map(im, H)
+    inside = (sx &gt;= 0) &amp; (sx &lt;= w - 1) &amp; (sy &gt;= 0) &amp; (sy &lt;= h - 1)
+    sx = sx[inside]
+    sy = sy[inside]
+    x0 = np.minimum(np.floor(sx).astype(int), w - 2)   # keep x0 + 1 inside the image
+    y0 = np.minimum(np.floor(sy).astype(int), h - 2)
+    dx = (sx - x0).reshape(-1, 1)
+    dy = (sy - y0).reshape(-1, 1)
+    img = im.astype(float)
+    top = img[y0, x0] * (1 - dx) + img[y0, x0 + 1] * dx
+    bottom = img[y0 + 1, x0] * (1 - dx) + img[y0 + 1, x0 + 1] * dx
+    values = top * (1 - dy) + bottom * dy
+    imwarped = np.zeros((out_h, out_w, 3), dtype=np.uint8)
+    imwarped[inside] = np.clip(np.round(values), 0, 255).astype(np.uint8)
+    alpha = inside.astype(float)
+    return imwarped, alpha, (x_min, y_min)</code></pre></div>
+</section>
+
+<section id="rectify" class="scene"><div class="section-heading"><p class="kicker">Part A.3</p><h2><span class="section-num">A.3</span> Rectification</h2><p>To test the warp before building mosaics, I photographed two planar rectangles at an angle. I clicked their four corners (top-left, top-right, bottom-right, bottom-left), mapped them to an upright rectangle with the correct aspect ratio, and warped the whole photo with bilinear interpolation.</p></div>
+<div class="case-block"><h3>A4 study sheet → 840 &times; 1188 (1 : √2)</h3>
+<div class="figure-grid three">
+<figure><a class="image-frame" href="media/rectify/rec1_input.jpg" target="_blank" rel="noopener"><img src="media/rectify/rec1_input.jpg" alt="Photo of a sheet of paper on a wooden floor with its corners outlined" width="900" height="1200" loading="lazy"></a><figcaption>Input with the clicked quadrilateral</figcaption></figure>
+<figure><a class="image-frame" href="media/rectify/rect_rec1.jpg" target="_blank" rel="noopener"><img src="media/rectify/rect_rec1.jpg" alt="Whole photo warped so the paper is a rectangle" width="1312" height="1400" loading="lazy"></a><figcaption>Whole photo warped (4783&times;5105 output)</figcaption></figure>
+<figure><a class="image-frame" href="media/rectify/rect_rec1_bil_crop.jpg" target="_blank" rel="noopener"><img src="media/rectify/rect_rec1_bil_crop.jpg" alt="Rectified sheet cropped to its rectangle" width="840" height="1188" loading="lazy"></a><figcaption>Cropped to the target rectangle</figcaption></figure>
+</div><p class="observation">After rectification the text reads horizontally and the margins are parallel. In the whole-photo warp, the floor behind the paper stretches into a long wedge: points far from the camera are magnified most, so the output box (4783&times;5105) is much larger than the sheet itself.</p></div>
+<div class="case-block"><h3>Floor tile → 800 &times; 800 (square)</h3>
+<div class="figure-grid three">
+<figure><a class="image-frame" href="media/rectify/rec2_input.jpg" target="_blank" rel="noopener"><img src="media/rectify/rec2_input.jpg" alt="Photo of stone floor tiles taken at an angle with one tile outlined" width="900" height="1200" loading="lazy"></a><figcaption>Input with the clicked quadrilateral</figcaption></figure>
+<figure><a class="image-frame" href="media/rectify/rect_rec2.jpg" target="_blank" rel="noopener"><img src="media/rectify/rect_rec2.jpg" alt="Whole floor warped so the tiles form an axis-aligned grid" width="906" height="1400" loading="lazy"></a><figcaption>Whole photo warped</figcaption></figure>
+<figure><a class="image-frame" href="media/rectify/rect_rec2_bil_crop.jpg" target="_blank" rel="noopener"><img src="media/rectify/rect_rec2_bil_crop.jpg" alt="The rectified tile, cropped to a square" width="800" height="800" loading="lazy"></a><figcaption>Cropped to the target square</figcaption></figure>
+</div><p class="observation">I clicked only one tile, yet every grout line in the whole-photo warp comes out horizontal or vertical. The floor is a single plane, so one homography straightens all of it.</p></div>
+</section>
+
+<section id="interp" class="scene"><div class="section-heading"><p class="kicker">Part A.3</p><h2><span class="section-num">A.3</span> Nearest Neighbor vs Bilinear</h2><p>Both methods compute the same inverse map; they differ only in how they read the source. Nearest neighbor reads one pixel per output pixel. Bilinear reads four and computes a weighted sum.</p></div>
+<div class="selected-results" style="grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)">
+<figure class="selected-figure interp-toggle"><div class="comparison" style="aspect-ratio:1.5"><img data-method="nn" src="media/interp/detail_nn.png" alt="Rectified text sampled with nearest neighbor, enlarged 3x" width="900" height="600" loading="lazy"><img data-method="bil" src="media/interp/detail_bil.png" alt="Rectified text sampled with bilinear interpolation, enlarged 3x" width="900" height="600" loading="lazy" hidden></div>
+<div class="compare-controls" role="group" aria-label="Interpolation method"><button type="button" aria-pressed="true" data-method="nn">Nearest neighbor</button><button type="button" aria-pressed="false" data-method="bil">Bilinear</button></div>
+<figcaption>A 300&times;200 crop of the rectified sheet, enlarged 3&times; with no smoothing. Showing: <span class="interp-label">Nearest neighbor</span>. Here the source was first reduced to 1/4 size, so the rectification enlarges it about 1.7&times;. That magnification is where the two methods differ most.</figcaption></figure>
+<div><div class="table-wrap technical-table" style="margin-top:0"><table><caption>Time to warp rec1.jpg onto the 840&times;1188 sheet. Both rows produce the same 4783&times;5105 output box (24.4 Mpx).</caption>
+<thead><tr><th>Source</th><th>Nearest</th><th>Bilinear</th></tr></thead><tbody>
+<tr><th>4284&times;5712 (full)</th><td>0.55 s</td><td>1.97 s</td></tr>
+<tr><th>1071&times;1428 (1/4)</th><td>0.58 s</td><td>1.00 s</td></tr>
+</tbody></table></div>
+<div class="text-columns" style="grid-template-columns:1fr;margin-top:30px">
+<div><h3>Quality</h3><p>Nearest neighbor copies whole source pixels, so slanted strokes and box edges turn into stair steps and letters look blocky. Bilinear interpolation turns those steps into smooth ramps, at the cost of slight blur: it never produces a value sharper than its four neighbors.</p></div></div></div></div>
+</section>
+
+<section id="mosaic" class="scene"><div class="section-heading"><p class="kicker">Part A.4</p><h2><span class="section-num">A.4</span> Blend the Images into a Mosaic</h2><p>The middle photo of each set is the reference and is left unwarped. The left photo is warped by \(H_{\text{left}\to\text{mid}}\), and the right photo by \(H_{\text{mid}\to\text{right}}^{-1}\). My own photos are reduced to 1/4 size first, and their homographies are rescaled to match.</p></div>
+<div class="method-layout" style="grid-template-columns:1fr;max-width:1400px"><div class="steps">
+<article><span>01</span><div><h3>Rescale H</h3><p>The points were clicked at full resolution. Reducing every image by a factor \(s\) changes the homography to \(S H S^{-1}\) with \(S = \operatorname{diag}(s, s, 1)\), so I never re-click points.</p></div></article>
+<article><span>02</span><div><h3>Warp and weight</h3><p>Each image is warped with <code>warpImageBilinear</code>. Its weight is a linear feather defined in the source image: 1 at the center, falling to 0 at every edge. I evaluate the weight at the same back-projected location \((s_x, s_y)\) that <code>inverse_map</code> returns, so it lines up exactly with the warped pixels. Then I multiply by \(\alpha\).</p></div></article>
+<article><span>03</span><div><h3>Canvas and weighted average</h3><p>The canvas spans the union of all warped bounding boxes. Each image is accumulated at offset \((x_{\min} - \text{left},\, y_{\min} - \text{top})\). Inside the overlap, the weights hand each pixel off gradually from one photo to the next, so no hard seam appears.</p></div></article>
+</div></div>
+<div class="equation">\[w(s_x, s_y) = \Big(1 - \big|\tfrac{2s_x}{W-1} - 1\big|\Big)\Big(1 - \big|\tfrac{2s_y}{H-1} - 1\big|\Big),\qquad I_{\text{mosaic}} = \frac{\sum_i w_i\,\alpha_i\,I_i}{\sum_i w_i\,\alpha_i}\]</div>
+<div class="code-block"><h3>feather_weight, mosaic</h3><pre><code>def feather_weight(im, H):
+    h, w = im.shape[0], im.shape[1]
+    sx, sy, _, _, _, _ = inverse_map(im, H)
+    wx = 1 - np.abs(2 * sx / (w - 1) - 1)
+    wy = 1 - np.abs(2 * sy / (h - 1) - 1)
+    return np.clip(wx * wy, 0, 1)
+
+def mosaic(names, Hs, scale):
+    S = np.diag([scale, scale, 1])
+    parts = []
+    for name, H in zip(names, Hs):
+        im = load_small(name, scale)
+        H = S @ H @ np.linalg.inv(S)
+        imwarped, alpha, (x_min, y_min) = warpImageBilinear(im, H)
+        weight = feather_weight(im, H) * alpha
+        parts.append((imwarped, weight, x_min, y_min))
+
+    left = min(p[2] for p in parts)
+    top = min(p[3] for p in parts)
+    right = max(p[2] + p[0].shape[1] for p in parts)
+    bottom = max(p[3] + p[0].shape[0] for p in parts)
+
+    total = np.zeros((bottom - top, right - left, 3))
+    total_weight = np.zeros((bottom - top, right - left))
+    for imwarped, weight, x_min, y_min in parts:
+        r, c = y_min - top, x_min - left
+        h, w = weight.shape
+        total[r:r + h, c:c + w] += imwarped * weight[:, :, None]
+        total_weight[r:r + h, c:c + w] += weight
+
+    total_weight[total_weight == 0] = 1
+    result = total / total_weight[:, :, None]
+    return result.astype(np.uint8)</code></pre></div>
+</section>
+
+<section id="results" class="scene"><div class="section-heading"><p class="kicker">Part A.4</p><h2><span class="section-num">A.4</span> Mosaics</h2><p>All three mosaics are planar projections onto the reference photo. That is why each has a bow-tie outline: the side images are seen at a steeper angle, so their outer edges are stretched.</p></div>
+<div class="case-block"><h3>Snowy peaks: 1 + 2 + 3</h3>
+<figure class="wide-figure"><a class="image-frame" href="media/mosaics/mosaic_123.jpg" target="_blank" rel="noopener"><img src="media/mosaics/mosaic_123.jpg" alt="Mosaic of photos 1, 2 and 3" width="2000" height="1906" loading="lazy"></a><figcaption>2149&times;2048 at 1/4 scale. The snowline, forest texture, and the cirrus clouds continue across both seams without doubling.</figcaption></figure></div>
+<div class="case-block"><h3>River valley: 9 + 10 + 11</h3>
+<figure class="wide-figure"><a class="image-frame" href="media/mosaics/mosaic_9_10_11.jpg" target="_blank" rel="noopener"><img src="media/mosaics/mosaic_9_10_11.jpg" alt="Mosaic of photos 9, 10 and 11" width="2000" height="1762" loading="lazy"></a><figcaption>2097&times;1847 at 1/4 scale. The ridges and the granite ledge in the foreground line up. The weakest spot is the upper sky, which lies farther from the 9 → 10 points than any other region.</figcaption></figure></div>
+<div class="case-block"><h3>Golden Gate Bridge: goldengate 01 + 02 + 03</h3>
+<figure class="wide-figure"><a class="image-frame" href="media/mosaics/mosaic_goldengate.jpg" target="_blank" rel="noopener"><img src="media/mosaics/mosaic_goldengate.jpg" alt="Mosaic of the three Golden Gate images" width="1174" height="967" loading="lazy"></a><figcaption>1174&times;967 at full scale. Every suspender cable, the tower, and the deck truss stay single and straight across both overlaps, which reflects the sub-pixel fits in A.2.</figcaption></figure></div>
+<footer class="report-footer"><span>CS180 Project 4A · Anzhe Lyu · Fall 2026</span><span>Golden Gate images: Adobe Open Source Data Sets, Adobe Panoramas</span></footer>
+</section>
+</main></body></html>
